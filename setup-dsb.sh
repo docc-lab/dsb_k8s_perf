@@ -27,7 +27,8 @@ git clone $REPO_URL
 cd /local/DeathStarBench/wrk2
 git submodule update --init --recursive ./deps/luajit/
 sudo apt-get update
-sudo apt-get install -y libssl-dev
+sudo apt-get install -y libssl-dev luarocks libz-dev
+sudo luarocks install luasocket
 make all
 
 # Pull hotelreservation docker images

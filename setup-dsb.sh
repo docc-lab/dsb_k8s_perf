@@ -31,6 +31,14 @@ sudo apt-get install -y libssl-dev luarocks libz-dev
 sudo luarocks install luasocket
 make all
 
+# install go
+wget https://go.dev/dl/go1.23.1.linux-amd64.tar.gz
+sudo tar -xvf go1.23.1.linux-amd64.tar.gz -C /usr/local
+rm go1.23.1.linux-amd64.tar.gz
+
+echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.profile
+source ~/.profile
+
 # Pull hotelreservation docker images
 sudo docker pull $DOCKER_IMAGE
 

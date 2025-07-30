@@ -13,7 +13,7 @@ logtstart "dsb"
 # Variables
 #REPO_URL="https://github.com/docc-lab/DeathStarBench.git"
 # Replace lab fork with Furkan's perf repo
-REPO_URL="https://github.com/frknsrky/DeathStarBench.git"
+REPO_URL="https://github.com/docc-lab/dsb_hd_counter.git"
 DOCKER_IMAGE="deathstarbench/hotel-reservation"
 KUBERNETES_DIR="hotelReservation/kubernetes"  # Path to the Kubernetes directory within the repo
 

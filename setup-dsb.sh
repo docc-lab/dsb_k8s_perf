@@ -14,6 +14,7 @@ logtstart "dsb"
 #REPO_URL="https://github.com/docc-lab/DeathStarBench.git"
 # Replace lab fork with Furkan's perf repo
 REPO_URL="https://github.com/docc-lab/dsb_hd_counter.git"
+REPO_NAME="dsb_hd_counter"
 DOCKER_IMAGE="deathstarbench/hotel-reservation"
 KUBERNETES_DIR="hotelReservation/kubernetes"  # Path to the Kubernetes directory within the repo
 
@@ -43,7 +44,7 @@ source ~/.profile
 sudo docker pull $DOCKER_IMAGE
 
 # Setup kubernetes cluster
-sudo kubectl apply -Rf /local/DeathStarBench/$KUBERNETES_DIR
+sudo kubectl apply -Rf /local/$REPO_NAME/$KUBERNETES_DIR
 
 echo "deathstarbench-k8s setup complete"
 

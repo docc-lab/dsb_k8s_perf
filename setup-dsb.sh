@@ -25,7 +25,7 @@ cd /local
 git clone $REPO_URL
 
 # Prepare workload generator
-cd /local/DeathStarBench/wrk2
+cd /local/$REPO_NAME/wrk2
 git submodule update --init --recursive ./deps/luajit/
 sudo apt-get update
 sudo apt-get install -y libssl-dev luarocks libz-dev

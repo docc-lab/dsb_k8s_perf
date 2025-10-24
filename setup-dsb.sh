@@ -23,6 +23,8 @@ echo "setup deathstarbench in k8s"
 # Clone the repository
 cd /local
 git clone $REPO_URL
+# switch to branch for just collecting traces for Darby's paper for now
+git switch before-interceptor
 
 # Prepare workload generator
 cd /local/$REPO_NAME/wrk2

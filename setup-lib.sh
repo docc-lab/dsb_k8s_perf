@@ -115,6 +115,15 @@ NFSEXPORTDIR=$STORAGEDIR/nfs
 NFSMOUNTDIR=/nfs
 NFSASYNC=0
 YQFROMPKG=0
+# HarvestContainers (harvest-k612 branch).  HARVESTKERNEL may be a series
+# (e.g. 6.12, resolved to the newest 6.12.N on kernel.org) or an exact
+# version (e.g. 6.12.48).  HARVESTWORKERS is a comma-separated node list.
+HARVESTENABLE=1
+HARVESTKERNEL="6.12"
+HARVESTSCHEDEXT=1
+HARVESTWORKERS="node-4"
+HARVESTBOOTARGS="nosmt=force intel_idle.max_cstate=0 processor.max_cstate=0"
+HARVESTREPO="https://github.com/docc-lab/HarvestContainers-docclab-mod.git"
 
 #
 # We have an 'admin' user that gets a random password that comes in from

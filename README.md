@@ -144,3 +144,43 @@
       So if you want to check Jaeger UI with graphic ssh, extra steps to setup graphic ssh to use browser are required on both your local and remote machine. I'll leave this part on your own.
 
    3. Via api
+
+## F. HarvestContainers (`harvest-k612` branch)
+
+This branch prepares the cluster for running HarvestContainers (HC) as a mitigation actuator. The full plan is in `Docs/07_icelake_hc_actuator_plan.md` in the HC repo. It is controlled by these profile parameters:
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `nodeCount` | 5 | node-0 is the control plane/orchestrator, node-4 the target |
+| `nodeType` | (empty) | pick the Ice Lake type (2x Xeon Silver 4314) |
+| `harvestEnable` | true | turn all of the below on/off |
+| `harvestKernel` | `6.12` | kernel.org series (newest point release) or exact version |
+| `harvestSchedExt` | true | build with `CONFIG_SCHED_CLASS_EXT` (+ BPF/BTF) |
+| `harvestWorkers` | `node-4` | comma list of HC nodes |
+| `harvestBootArgs` | `nosmt=force intel_idle.max_cstate=0 processor.max_cstate=0` | added to the kernel command line on HC nodes only |
+| `harvestRepo` | docc-lab/HarvestContainers-docclab-mod | cloned to `/local/HarvestContainers` |
+
+What happens during setup:
+
+1. `setup-kernel.sh` (every node) builds the kernel with `make bindeb-pkg` from the running Ubuntu config. This takes roughly 30–60 minutes. It installs the image, headers, perf and cpupower, sets grub via `/etc/default/grub.d/99-harvest.cfg`, and **reboots once**. The startup command runs again after boot, and every script skips work it already did (`/local/setup/*-done` markers). The pre-reboot log is saved to `/local/logs/setup.pre-reboot.log`.
+2. `setup-kernel-wait.sh` (node-0) waits until every node has booted the new kernel before Kubespray runs.
+3. `setup-harvest.sh` (HC workers):
+   - installs packages and clones HC;
+   - bind-mounts `/storage/extra` on `/mnt/extra`;
+   - disables `irqbalance`;
+   - writes `/etc/default/hc-harvest` (CPU lists: **check `lscpu -e` and edit**);
+   - installs `/usr/local/sbin/hc-load-module` and the `hc-listener` / `hc-balancer` systemd units (not enabled);
+   - tries `setup-bins.sh`.
+4. `setup-kubernetes-extra.sh` labels the HC workers with `podtype=harvest`.
+
+Verify on each HC worker:
+
+```bash
+uname -r                                        # <version>-harvest
+stat -fc %T /sys/fs/cgroup                      # cgroup2fs
+lscpu | grep 'Thread(s) per core'               # 1
+grep SCHED_CLASS_EXT /boot/config-$(uname -r)   # =y
+cat /proc/cmdline                               # contains the boot args
+```
+
+Start HC by hand: `sudo systemctl start hc-listener` (this loads the module first), then `sudo systemctl start hc-balancer`.

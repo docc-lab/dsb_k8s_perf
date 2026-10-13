@@ -151,6 +151,13 @@ fi
 
 
 
+# Label HarvestContainers workers (HC's CPUBully pods select podtype=harvest).
+if [ "$HARVESTENABLE" = "1" ]; then
+    for node in `echo $HARVESTWORKERS | tr ',' ' '` ; do
+	kubectl label node $node podtype=harvest --overwrite
+    done
+fi
+
 logtend "kubernetes-extra"
 touch $OURDIR/kubernetes-extra-done
 exit 0

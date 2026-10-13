@@ -37,12 +37,38 @@ pc = portal.Context()
 #
 pc.defineParameter(
     "nodeCount","Number of Nodes",
-    portal.ParameterType.INTEGER,3,
-    longDescription="Number of nodes in your kubernetes cluster.  Should be either 1, or >= 3.")
+    portal.ParameterType.INTEGER,5,
+    longDescription="Number of nodes in your kubernetes cluster.  Should be either 1, or >= 3.  The HarvestContainers setup expects 5 (node-0 control plane/orchestrator, node-4 target).")
 pc.defineParameter(
     "nodeType","Hardware Type",
     portal.ParameterType.NODETYPE,"",
-    longDescription="A specific hardware type to use for each node.  Cloudlab clusters all have machines of specific types.  When you set this field to a value that is a specific hardware type, you will only be able to instantiate this profile on clusters with machines of that type.  If unset, when you instantiate the profile, the resulting experiment may have machines of any available type allocated.")
+    longDescription="A specific hardware type to use for each node.  For the HarvestContainers experiments, choose the Ice Lake type with 2x Xeon Silver 4314 (16 cores/socket) so CPU lists in the HC configs match.  Cloudlab clusters all have machines of specific types.  When you set this field to a value that is a specific hardware type, you will only be able to instantiate this profile on clusters with machines of that type.  If unset, when you instantiate the profile, the resulting experiment may have machines of any available type allocated.")
+pc.defineParameter(
+    "harvestEnable","HarvestContainers: Enable",
+    portal.ParameterType.BOOLEAN,True,
+    longDescription="Build and boot a newer kernel on every node (one reboot during setup) and prepare the HarvestContainers workers (packages, /mnt/extra, systemd units, podtype=harvest node label).")
+pc.defineParameter(
+    "harvestKernel","HarvestContainers: Kernel Version",
+    portal.ParameterType.STRING,"6.12",
+    longDescription="Kernel built from kernel.org sources on every node.  Either a series (e.g. 6.12, which resolves to the newest 6.12.N) or an exact version (e.g. 6.12.48).  Built with bindeb-pkg so the headers match the userland (mainline .debs from kernel.ubuntu.com need a newer glibc than Ubuntu 22.04 for their headers).")
+pc.defineParameter(
+    "harvestSchedExt","HarvestContainers: Enable sched_ext",
+    portal.ParameterType.BOOLEAN,True,
+    longDescription="Enable CONFIG_SCHED_CLASS_EXT (and its BPF/BTF dependencies) in the built kernel, for a later sched_ext arm.",
+    advanced=True)
+pc.defineParameter(
+    "harvestWorkers","HarvestContainers: Worker Nodes",
+    portal.ParameterType.STRING,"node-4",
+    longDescription="Comma-separated list of nodes that run HarvestContainers (Monitor kernel module, Listener, Balancer).  These nodes also get the boot arguments below.")
+pc.defineParameter(
+    "harvestBootArgs","HarvestContainers: Worker Boot Arguments",
+    portal.ParameterType.STRING,"nosmt=force intel_idle.max_cstate=0 processor.max_cstate=0",
+    longDescription="Extra kernel command-line arguments added on the HarvestContainers worker nodes only.")
+pc.defineParameter(
+    "harvestRepo","HarvestContainers: Git Repository",
+    portal.ParameterType.STRING,"https://github.com/docc-lab/HarvestContainers-docclab-mod.git",
+    longDescription="HarvestContainers repository cloned to /local/HarvestContainers on the worker nodes.",
+    advanced=True)
 pc.defineParameter(
     "linkSpeed","Experiment Link Speed",
     portal.ParameterType.INTEGER,0,
@@ -250,6 +276,17 @@ if params.kubeDoMetalLB and params.publicIPCount < 1:
         "If you enable MetalLB, you must request at least one public IP address!",
         ["kubeDoMetalLB","publicIPCount"])
     pc.reportWarning(perr)
+if params.harvestEnable:
+    for w in params.harvestWorkers.split(","):
+        w = w.strip()
+        if not w:
+            continue
+        if not w.startswith("node-") or not w[5:].isdigit() \
+          or int(w[5:]) >= params.nodeCount:
+            perr = portal.ParameterWarning(
+                "HarvestContainers worker %s is not one of node-0..node-%d!" % (w,params.nodeCount-1),
+                ["harvestWorkers","nodeCount"])
+            pc.reportWarning(perr)
 i = 0
 for x in params.sharedVlans:
     n = 0

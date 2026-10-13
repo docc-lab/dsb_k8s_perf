@@ -3,17 +3,19 @@
 set -x
 
 # Preserve legacy main logfile location
-ln -s /local/logs/setup.log /local/setup/setup-driver.log
+[ -e /local/setup/setup-driver.log ] || ln -s /local/logs/setup.log /local/setup/setup-driver.log
 
-ALLNODESCRIPTS="setup-ssh.sh setup-disk-space.sh"
-HEADNODESCRIPTS="setup-nfs-server.sh setup-nginx.sh setup-ssl.sh setup-kubespray.sh setup-kubernetes-extra.sh setup-dsb.sh setup-end.sh"
-WORKERNODESCRIPTS="setup-nfs-client.sh"
+# setup-kernel.sh reboots the node once (HarvestContainers kernel); on the
+# re-run after boot, every script skips itself via its $OURDIR/*-done marker.
+ALLNODESCRIPTS="setup-ssh.sh setup-disk-space.sh setup-kernel.sh"
+HEADNODESCRIPTS="setup-nfs-server.sh setup-nginx.sh setup-ssl.sh setup-kernel-wait.sh setup-kubespray.sh setup-kubernetes-extra.sh setup-dsb.sh setup-harvest.sh setup-end.sh"
+WORKERNODESCRIPTS="setup-nfs-client.sh setup-harvest.sh"
 
 export SRC=`dirname $0`
 cd $SRC
 . $SRC/setup-lib.sh
 
-chmod +x $SRC/setup-dsb.sh
+chmod +x $SRC/setup-dsb.sh $SRC/setup-kernel.sh $SRC/setup-kernel-wait.sh $SRC/setup-harvest.sh
 
 # Don't run setup-driver.sh twice
 if [ -f $OURDIR/setup-driver-done ]; then

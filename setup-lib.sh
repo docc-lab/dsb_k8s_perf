@@ -58,6 +58,45 @@ logtend() {
     echo "TOTAL $area $tsres $resmin" >> $TIMELOGFILE
 }
 
+#
+# Dump disk/LVM/mount state into the calling script's log.  Sector sizes
+# are included because mixed 512/4096 NVMe namespaces break vgcreate.
+#
+storage_report() {
+    echo "=== storage report ($1): `hostname` `uname -r` `date` ==="
+    lsblk -o NAME,SIZE,TYPE,FSTYPE,LOG-SEC,PHY-SEC,MOUNTPOINT
+    $SUDO pvs
+    $SUDO vgs
+    $SUDO lvs
+    echo "--- /etc/fstab:"
+    grep -v '^[[:space:]]*#' /etc/fstab | grep -v '^[[:space:]]*$'
+    echo "--- findmnt --verify:"
+    $SUDO findmnt --verify 2>&1
+    echo "=== end storage report ==="
+}
+
+#
+# Every fstab entry systemd will wait for at boot must be mounted now;
+# one that isn't drops the next boot into emergency mode, without sshd.
+# Prints an ERROR line per bad entry; returns 1 if any.
+#
+fstab_check() {
+    fcrc=0
+    while read -r fsrc fmnt ftype fopts frest ; do
+	case "$fsrc" in ''|\#*) continue ;; esac
+	case "$ftype" in swap) continue ;; esac
+	case "$fopts" in *noauto*) continue ;; esac
+	if ! mountpoint -q "$fmnt" ; then
+	    case "$fopts" in
+		*nofail*) echo "ERROR: fstab entry '$fsrc $fmnt' is not mounted (nofail: boot would continue, but without it)" ;;
+		*) echo "ERROR: fstab entry '$fsrc $fmnt' is not mounted; a reboot would hang in emergency mode" ;;
+	    esac
+	    fcrc=1
+	fi
+    done < /etc/fstab
+    return $fcrc
+}
+
 if [ $FIRSTTIME -ne 0 ]; then
     logtstart "libfirsttime"
 fi

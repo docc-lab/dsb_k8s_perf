@@ -44,8 +44,10 @@ fi
 #
 if [ -f $OURDIR/kernel-installed ]; then
     KREL=`cat $OURDIR/kernel-installed`
+    storage_report "after reboot"
     if [ "`uname -r`" = "$KREL" ]; then
-	echo "Booted harvest kernel $KREL"
+	echo "Booted harvest kernel $KREL (cmdline: `cat /proc/cmdline`)"
+	fstab_check || echo "WARNING: some fstab entries did not mount after reboot (see above)"
 	touch $OURDIR/kernel-done
 	exit 0
     fi
@@ -54,6 +56,15 @@ if [ -f $OURDIR/kernel-installed ]; then
 fi
 
 logtstart "kernel"
+
+# Fail before the long build, not after it: if the reboot below would
+# hang on an unmountable fstab entry, stop here with the node still up.
+storage_report "before kernel build"
+fstab_check
+if [ ! $? -eq 0 ]; then
+    echo "ERROR: fix the fstab entries above (see setup-disk-space.sh.log) before the kernel reboot; aborting!"
+    exit 1
+fi
 
 #
 # Resolve a series (e.g. 6.12) to the newest point release on kernel.org.
@@ -168,6 +179,13 @@ fi
 
 echo "$KREL" > $OURDIR/kernel-installed
 logtend "kernel"
+
+# Last gate: nothing may have unmounted during the build.
+fstab_check
+if [ ! $? -eq 0 ]; then
+    echo "ERROR: not rebooting into $KREL; an unmounted fstab entry would hang the boot"
+    exit 1
+fi
 
 # The startup command's log is truncated when it re-runs after reboot.
 cp -p /local/logs/setup.log /local/logs/setup.pre-reboot.log

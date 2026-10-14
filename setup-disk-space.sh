@@ -32,6 +32,8 @@ ARCH=`uname -m`
 
 maybe_install_packages lvm2 maybe_install_packages thin-provisioning-tools
 
+storage_report "disk-space start"
+
 #
 # First try to make LVM volumes; fall back to mkextrafs.pl /storage.  We
 # use /storage later, so we make the dir either way.
@@ -86,7 +88,10 @@ elif [ -z "$LVM" ] ; then
     $SUDO lsblk -n -P -b -o NAME,FSTYPE,MOUNTPOINT,PARTTYPE,PARTUUID,TYPE,PKNAME,SIZE | perl -e 'my %devs = (); while (<STDIN>) { $_ =~ s/([A-Z0-9a-z]+=)/;\$$1/g; eval "$_"; if (!($TYPE eq "disk" || $TYPE eq "part")) { next; }; if (exists($devs{$PKNAME})) { delete $devs{$PKNAME}; } if ($FSTYPE eq "" && $MOUNTPOINT eq "" && ($PARTTYPE eq "" || $PARTTYPE eq "0x0") && (int($SIZE) > 3221225472)) { $devs{$NAME} = "/dev/$NAME"; } }; print join(" ",values(%devs))."\n"' > /tmp/devs
     DEVS=`cat /tmp/devs`
     if [ -n "$DEVS" ]; then
-	$SUDO pvcreate $DEVS && $SUDO vgcreate $VGNAME $DEVS
+	# Some nodes mix 512- and 4096-byte-sector NVMe namespaces, which
+	# vgcreate refuses by default; ext4's 4k blocks are fine on either.
+	$SUDO pvcreate $DEVS && $SUDO vgcreate \
+	    --config 'devices { allow_mixed_block_sizes = 1 }' $VGNAME $DEVS
 	if [ ! $? -eq 0 ]; then
 	    echo "ERROR: failed to create PV/VG with '$DEVS'; falling back to mkextrafs.pl"
 	    $SUDO vgremove $VGNAME
@@ -126,18 +131,35 @@ if [ $LVM -eq 1 ]; then
     echo "LV_SIZE=${LV_SIZE}" >> $LOCALSETTINGS
 
     #$SUDO lvcreate -l 75%FREE -n $LVNAME $VGNAME
-    $SUDO lvcreate -L ${LV_SIZE}G -n $LVNAME $VGNAME
-
-    if [ -f /sbin/mkfs.ext4 ]; then
-	$SUDO mkfs.ext4 /dev/$VGNAME/$LVNAME
-	echo "/dev/$VGNAME/$LVNAME ${STORAGEDIR} ext4 defaults 0 0" \
-	    | $SUDO tee -a /etc/fstab
-    else
-	$SUDO mkfs.ext3 /dev/$VGNAME/$LVNAME
-	echo "/dev/$VGNAME/$LVNAME ${STORAGEDIR} ext3 defaults 0 0" \
-	    | $SUDO tee -a /etc/fstab
+    # -y -Wy: a stale filesystem signature from a previous user makes
+    # lvcreate prompt, and with no tty the prompt answers "no" and aborts.
+    $SUDO lvcreate -y -Wy -L ${LV_SIZE}G -n $LVNAME $VGNAME
+    if [ ! $? -eq 0 ]; then
+	echo "ERROR: lvcreate $VGNAME/$LVNAME failed; aborting!"
+	storage_report "lvcreate failed"
+	exit 1
     fi
+
+    FSTYPE=ext3
+    if [ -f /sbin/mkfs.ext4 ]; then
+	FSTYPE=ext4
+    fi
+    $SUDO mkfs.$FSTYPE /dev/$VGNAME/$LVNAME
+    if [ ! $? -eq 0 ]; then
+	echo "ERROR: mkfs.$FSTYPE /dev/$VGNAME/$LVNAME failed; aborting!"
+	storage_report "mkfs failed"
+	exit 1
+    fi
+    # nofail: setup-kernel.sh reboots the node, and a missing or slow
+    # volume must not drop the boot into emergency mode (no sshd).
+    echo "/dev/$VGNAME/$LVNAME ${STORAGEDIR} $FSTYPE defaults,nofail,x-systemd.device-timeout=300 0 0" \
+	| $SUDO tee -a /etc/fstab
     $SUDO mount ${STORAGEDIR}
+    if ! mountpoint -q ${STORAGEDIR} ; then
+	echo "ERROR: /dev/$VGNAME/$LVNAME did not mount on ${STORAGEDIR}; aborting!"
+	storage_report "mount failed"
+	exit 1
+    fi
 fi
 
 #
@@ -146,9 +168,10 @@ fi
 for dir in docker kubelet ; do
     $SUDO mkdir -p $STORAGEDIR/$dir /var/lib/$dir
     $SUDO mount -o bind $STORAGEDIR/$dir /var/lib/$dir
-    echo "$STORAGEDIR/$dir /var/lib/$dir none defaults,bind 0 0" \
+    echo "$STORAGEDIR/$dir /var/lib/$dir none defaults,bind,nofail 0 0" \
         | $SUDO tee -a /etc/fstab
 done
 
+storage_report "disk-space end"
 logtend "disk-space"
 touch $OURDIR/disk-space-done

@@ -65,7 +65,7 @@ if [ -d $STORAGEDIR ]; then
     $SUDO mkdir -p $STORAGEDIR/extra /mnt/extra
     grep -q ' /mnt/extra ' /etc/fstab
     if [ ! $? -eq 0 ]; then
-	echo "$STORAGEDIR/extra /mnt/extra none defaults,bind 0 0" \
+	echo "$STORAGEDIR/extra /mnt/extra none defaults,bind,nofail 0 0" \
 	    | $SUDO tee -a /etc/fstab
     fi
     mountpoint -q /mnt/extra || $SUDO mount /mnt/extra
@@ -87,18 +87,21 @@ if [ ! -f /etc/default/hc-harvest ]; then
     cat <<'EOF' | $SUDO tee /etc/default/hc-harvest
 # HarvestContainers host settings (read by hc-load-module and the
 # hc-listener / hc-balancer units).  Edit after checking `lscpu -e`.
+# sm110p is one 16-core socket, so with nosmt=force only CPUs 0-15 are
+# online: 0-1 housekeeping/IRQs, 9-11 other pods, 12 the mitigation
+# controller, 13-15 the HC daemons below.
 HC_DIR=/local/HarvestContainers
 HC_BIN=/local/HarvestContainers/TestFramework/bin
 HC_LOGDIR=/mnt/extra/logs/hc
-# Primary (victim) cores the Monitor watches.
-HC_CPULIST=18,19,20
+# Primary (victim) cores the Monitor watches; search's CPU_SET.
+HC_CPULIST=2,3,4
 # Cores dedicated to the Secondary (aggressors).
-HC_SECONDARY_CPULIST=21,22,23,24
+HC_SECONDARY_CPULIST=5,6,7,8
 HC_TARGET_IDLE_CORES=1
 HC_MIN_SECONDARY_CORES=0
-HC_MONITOR_CPU=31
-HC_BALANCER_CPU=30
-HC_LISTENER_CPU=29
+HC_MONITOR_CPU=15
+HC_BALANCER_CPU=14
+HC_LISTENER_CPU=13
 EOF
 fi
 

@@ -109,13 +109,21 @@ cat <<'EOF' | $SUDO tee /usr/local/sbin/hc-load-module
 #!/bin/sh
 # Load qidlecpu.ko (built by TestFramework/Experiments/setup-bins.sh),
 # point it at HC_CPULIST, bind the Monitor kthread, and start polling.
+#
+# Only on a fresh insmod: kthread_bind() on the already-running Monitor
+# kthread (hc-listener restarts run us again) just WARNs.  The sleep
+# matches HC's loadModule/startModule: the bindcpu write wakes the
+# kthread, which clears `runnable` as it starts, so a `control` write
+# that lands first is lost and the kthread sleeps forever.
 set -e
 . /etc/default/hc-harvest
-if ! grep -q '^qidlecpu ' /proc/modules; then
-    insmod $HC_BIN/qidlecpu.ko
+if grep -q '^qidlecpu ' /proc/modules; then
+    exit 0
 fi
+insmod $HC_BIN/qidlecpu.ko
 echo $HC_CPULIST > /proc/idlecpu/cpulist
 echo $HC_MONITOR_CPU > /proc/idlecpu/bindcpu
+sleep 2
 echo 1 > /proc/idlecpu/control
 EOF
 $SUDO chmod 755 /usr/local/sbin/hc-load-module

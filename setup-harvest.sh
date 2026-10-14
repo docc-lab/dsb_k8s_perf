@@ -80,8 +80,8 @@ $SUDO chown -R $SWAPPER /mnt/extra
 $SUDO systemctl disable --now irqbalance || true
 
 #
-# Shared HC settings.  CPU ids assume socket 1 = CPUs 16-31 with SMT off;
-# check `lscpu -e` on the node and edit before starting anything.
+# Shared HC settings.  CPU ids assume a single 16-core socket with SMT
+# off (CPUs 0-15, as on sm110p); check `lscpu -e` on other node types.
 #
 if [ ! -f /etc/default/hc-harvest ]; then
     cat <<'EOF' | $SUDO tee /etc/default/hc-harvest
